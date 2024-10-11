@@ -43,9 +43,19 @@ fn main() {
 // simple start by extracting the ip version out of the packets
 fn process_packet(packet: Vec<u8>) {
     
+    // check the ethertype
+    let ethertype_bytes = &packet[12..14];
+    let ethertype = ((ethertype_bytes[0] as u16) << 8) | (ethertype_bytes[1] as u16);
+    
+    if ethertype != 0x0800{
+        // no vlan parsing
+        // vlan present tag 0x8100 not found in my home network so I skip it for now
+        return;
+    }
+    
     let ip_header = 14;
     let ip_type = &packet[ip_header] >> 4;
     println!("ip version {:?}", ip_type);
-    
-    // println!("Received packet as Vec<u8>, length: {:?}", packet);
+
+    // println!("Receivedp acket as Vec<u8>, length: {:?}", packet);
 }
