@@ -1,4 +1,4 @@
-use crate::packet::{self, frame::Packet};
+use crate::packet::frame::Packet;
 
 pub fn process_packet(bytes: Vec<u8>) {
     let result = Packet::new(bytes);
@@ -13,12 +13,14 @@ pub fn process_packet(bytes: Vec<u8>) {
     
     packet.extract_ip_header().unwrap();
 
-    if let Some(ipv4_header) = &packet.ipv4 {
+    if let Some(ip_header) = &packet.ip_header{
+        let source_ip = ip_header.src_ip.start;
+
         println!("Source IP: {}.{}.{}.{}", 
-            ipv4_header.source_ip[0], 
-            ipv4_header.source_ip[1], 
-            ipv4_header.source_ip[2], 
-            ipv4_header.source_ip[3]
+            packet.bytes[source_ip], 
+            packet.bytes[source_ip + 1],
+            packet.bytes[source_ip + 2 ],
+            packet.bytes[source_ip+ 3],
         );
     } else {
         println!("No IPv4 header found.");

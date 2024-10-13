@@ -6,30 +6,22 @@ pub mod frame {
     pub struct Packet {
         pub bytes: Vec<u8>,   
         pub vlan: Option<bool>, 
-        pub ipv4: Option<Ipv4Header>,
-        pub ipv6: Option<Ipv6Header>,
+        pub ip_header: Option<IpHeader>,
+    }
+
+
+    #[derive(Debug)]
+    pub struct StartEnd {
+        pub start: usize,
+        pub end: usize
     }
 
     #[derive(Debug)]
-    pub struct Ipv4Header {
-        ihl: u8,
-        total_length: u16,
-        protocol: u8,
-        pub source_ip: [u8; 4],
-        pub destination_ip: [u8; 4],
+    pub struct IpHeader {
+        pub complete: StartEnd,
+        pub src_ip: StartEnd,
+        pub dst_ip: StartEnd,
     }
-
-    #[derive(Debug)]
-    pub struct Ipv6Header {
-        version: u8,
-        traffic_class: u8,
-        flow_label: u32,
-        payload_length: u16,
-        next_header: u8,
-        hop_limit: u8,
-        source_ip: [u8; 16],
-        destination_ip: [u8; 16],
-}
 
     #[derive(Debug)]
     pub enum IpType {
@@ -56,27 +48,26 @@ pub mod frame {
             let ethertype_bytes = &bytes[12..14];
             let ethertype = ((ethertype_bytes[0] as u16) << 8) | (ethertype_bytes[1] as u16);
 
-            if ethertype != 0x0800{
-                // no vlan parsing
-                // vlan present tag 0x8100 not found in my home network so I skip it for now
+            if ethertype != 0x0800 && ethertype != 0x86DD {
+                // no vlan parsing only ipv4 and ipv6 for now
+                // vlan present tag 0x8100 not found in my home network so 
                 return Err(PacketError::UnsupportedEthertype);  
             }
             
             Ok(Packet { 
                 bytes: bytes[14..bytes.len()].to_vec(),
                 vlan: Some(false),
-                ipv4: None,
-                ipv6: None,
-                
+                ip_header: None,
             })
         }
 
+   
         pub fn extract_ip_header(&mut self) -> Result<(), PacketError> {
             
             let ip_version = (self.bytes[0] & 0b11110000) >> 4;
 
             match ip_version {
-                4 => {self.ipv4 = Some(self.extract_ipv4()?)},
+                4 => {self.zero_copy_ip_header(4)?},
                 6 => {},
                 _ => {return Err(PacketError::IpVersionNotRead)}
 
@@ -84,21 +75,22 @@ pub mod frame {
             Ok(())
         }
 
-        fn extract_ipv4(&self) -> Result<Ipv4Header, PacketError> {
-
-            if self.bytes.len() < 20 {
-                return Err(PacketError::InvalidIpv4Header);  
-            }
-
-            Ok(Ipv4Header{
-                ihl: self.bytes[0] & 0x0F,
-                total_length: u16::from_be_bytes([self.bytes[2], self.bytes[3]]),
-                protocol: self.bytes[9],
-                source_ip: <[u8; 4]>::try_from(&self.bytes[12..16]).unwrap(),
-                destination_ip: <[u8; 4]>::try_from(&self.bytes[16..20]).unwrap(),
-            }
-            )   
+        fn zero_copy_ip_header(&mut self, version: usize) -> Result<(), PacketError> {
+            // ipv4 for now
             
+            if version == 4 {
+                let ihl = self.bytes[0] & 0b00001111;
+
+                self.ip_header = Some(IpHeader{
+                    complete: StartEnd { start: 0, end: (ihl * 4 - 1) as usize },
+                    src_ip: StartEnd { start: 12, end: 15 },
+                    dst_ip: StartEnd { start: 16, end: 19 },
+                });
+            } else {
+                // parse ipv6
+            };
+
+            Ok(())
         }
 
         fn verify_overlapping_8_bit_sequence(first_byte: u8, second_byte: u8, verify: u8) -> bool {
